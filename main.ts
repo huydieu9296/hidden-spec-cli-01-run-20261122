@@ -176,6 +176,31 @@ function findOccurrences(
   return null;
 }
 
+// First index at or after `from` whose line matches `anchor` exactly
+// (tier 0), else ignoring trailing whitespace (tier 1), else ignoring
+// leading and trailing whitespace (tier 2); -1 when there is no match.
+// Tiers 1/2 are skipped in strict mode.
+function findAnchorAtOrAfter(
+  lines: string[],
+  anchor: string,
+  strict: boolean,
+  from: number
+): number {
+  for (let idx = from; idx < lines.length; idx++) {
+    if (lines[idx] === anchor) return idx;
+  }
+  if (strict) return -1;
+  const t1Anchor = trimTrailing(anchor);
+  for (let idx = from; idx < lines.length; idx++) {
+    if (trimTrailing(lines[idx]!) === t1Anchor) return idx;
+  }
+  const t2Anchor = trimBoth(anchor);
+  for (let idx = from; idx < lines.length; idx++) {
+    if (trimBoth(lines[idx]!) === t2Anchor) return idx;
+  }
+  return -1;
+}
+
 function applyTier2Reindent(line: string, F_first: string, O_first: string): string {
   if (trimBoth(line) === '') return line;
   const P = getLeadingIndent(O_first);
@@ -894,36 +919,7 @@ function v4aEdits(_text: string, lines: string[], strict: boolean): Edit[] {
 
         for (const chunk of sec.chunks) {
           if (chunk.anchor !== null) {
-            let foundIdx = -1;
-            const targetAnchor = chunk.anchor;
-
-            // Tier 0
-            for (let idx = cursor; idx < fc.lines.length; idx++) {
-              if (fc.lines[idx] === targetAnchor) {
-                foundIdx = idx;
-                break;
-              }
-            }
-            if (foundIdx < 0 && !strict) {
-              // Tier 1
-              const t1Anchor = trimTrailing(targetAnchor);
-              for (let idx = cursor; idx < fc.lines.length; idx++) {
-                if (trimTrailing(fc.lines[idx]!) === t1Anchor) {
-                  foundIdx = idx;
-                  break;
-                }
-              }
-            }
-            if (foundIdx < 0 && !strict) {
-              // Tier 2
-              const t2Anchor = trimBoth(targetAnchor);
-              for (let idx = cursor; idx < fc.lines.length; idx++) {
-                if (trimBoth(fc.lines[idx]!) === t2Anchor) {
-                  foundIdx = idx;
-                  break;
-                }
-              }
-            }
+            const foundIdx = findAnchorAtOrAfter(fc.lines, chunk.anchor, strict, cursor);
 
             if (foundIdx < 0) {
               throw new Fail('no-match', p);
